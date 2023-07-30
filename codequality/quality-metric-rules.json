@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "metricKey": "LineCoverage",
+      "displayName": "line coverage percentage",
+      "comparator": "GTE",
+      "value": "0.0"
+    },
+    {
+      "metricKey": "BranchCoverage",
+      "displayName": "branch coverage percentage",
+      "comparator": "GTE",
+      "value": "0.0"
+    },
+    {
+      "metricKey": "mutationCoverage",
+      "displayName": "mutation coverage percentage",
+      "comparator": "GTE",
+      "value": "0.0"
+    }
+  ]
+}

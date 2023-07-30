@@ -1,0 +1,109 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '2.6.9'
+    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
+    id "io.freefair.lombok" version "5.3.2"
+    id 'idea'
+
+    id 'jacoco'
+    id 'checkstyle'
+    id "com.github.spotbugs" version "4.5.1"
+    id "info.solidsoft.pitest" version "1.7.4"
+}
+
+apply from: file('gradle/check.gradle')
+apply from: file('gradle/integration.gradle')
+
+// create the releaseVersion property, included in logs for easier debugging.
+// eg, version=1.0.0 & build=36 -> releaseVersion=1.0.0.36
+jar.dependsOn processResources
+processResources {
+    project.ext.releaseVersion = "$version.${System.getenv("BUILD_NUMBER") ?: 0}"
+    filesMatching("**/application*.properties") {
+        expand(project.properties)
+    }
+}
+
+idea {
+    module {
+        downloadJavadoc = true
+        downloadSources = true
+    }
+}
+
+group = 'com.lights'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '11'
+
+// Define the repos used for finding dependencies.
+repositories {
+    // Use -PuseMavenLocal=true to enable
+    if (project.hasProperty("useMavenLocal")) {
+        // DO NOT put mavenLocal() in the general area as an always-available option.
+        // It will sometimes fail your builds with bizarre errors.
+        mavenLocal()
+    }
+
+    mavenCentral()
+}
+
+ext {
+    // project dependency versions
+    log4jVersion = '2.17.+'
+    restAssuredVersion = '5.2.0'
+}
+
+configurations.all {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'org.apache.logging.log4j') {
+            details.useVersion "${log4jVersion}"
+        }
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.zalando:logbook-spring-boot-starter:2.14.0")
+    implementation 'com.h2database:h2'
+    implementation("io.jsonwebtoken:jjwt:0.9.1")
+    implementation("io.jsonwebtoken:jjwt-impl:0.11.5")
+//    implementation("mysql:mysql-connector-java:8.0.33")
+    implementation("javax.validation:validation-api:2.0.1.Final")
+    // AWS libraries
+    implementation("com.amazonaws:aws-java-sdk-s3:1.12.336")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+}
+
+dependencyManagement {
+    resolutionStrategy {
+        cacheDynamicVersionsFor 0, 'seconds'
+    }
+
+    dependencies {
+        // vulnerabilities fix
+        dependency 'org.springframework:spring-core:5.3.26'
+        dependency 'org.springframework:spring-web:5.3.26'
+        dependency 'org.springframework:spring-webmvc:5.3.26'
+        dependency 'org.apache.tomcat.embed:tomcat-embed-core:9.0.72'
+        dependency 'com.fasterxml.jackson.core:jackson-databind:2.14.0'
+        dependency 'io.netty:netty-codec:4.1.86.Final'
+        dependency 'org.apache.httpcomponents:httpclient:4.5.13'
+        dependency 'org.eclipse.jetty:jetty-io:9.4.47.v20220610'
+        dependency 'org.yaml:snakeyaml:2.0'
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+bootRun {
+    jvmArgs = ['-Dspring.profiles.active=local']
+}
+
+jar {
+    enabled = false //to exclude plain jar from build/libs
+}

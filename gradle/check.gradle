@@ -1,0 +1,118 @@
+apply plugin: 'pmd'
+apply plugin: 'info.solidsoft.pitest'
+
+jacocoTestReport {
+    reports {
+        xml.enabled true
+        html.enabled true
+        html.destination file("$buildDir/reports/jacoco")
+    }
+
+    afterEvaluate {
+        classDirectories.from = files(classDirectories.files.collect {
+            fileTree(dir: it,
+                    exclude: [
+                            // inherited from blueprint
+                            '**/server/**',
+                            '**/Application.*',
+                            // not significant code to test
+                            '**/model/**',
+                            '**/configuration/**',
+                    ])
+        })
+    }
+}
+
+test {
+    useJUnitPlatform()  // use JUnit 5
+    jacoco {
+        destinationFile = file("$buildDir/jacoco/jacocoTest.exec")
+        classDumpDir = file("$buildDir/jacoco/classpathdumps")
+    }
+    finalizedBy jacocoTestReport
+}
+
+checkstyle {
+    configFile = rootProject.file('codequality/checkstyle.xml')
+    sourceSets = project.sourceSets.main as SourceSetContainer
+    checkstyleMain.exclude '**/Application.*/**'
+}
+
+tasks.withType(Checkstyle) {
+    reports {
+        xml.enabled = true
+        html.enabled = true
+        html.stylesheet = resources.text.fromFile('codequality/checkstyle-noframes-sorted.xsl')
+    }
+}
+
+pmd {
+    toolVersion = "6.49.0"
+    incrementalAnalysis = true
+    consoleOutput = true
+    sourceSets = [project.sourceSets.main]
+    ruleSets = ["codequality/pmd-rules.xml"]
+}
+
+// Avoid running PMD on the `test` module (we only want to run pmdMain)
+pmdTest.enabled = false
+
+spotbugs {
+    excludeFilter = file('codequality/spotbugs-exclude.xsl')
+}
+
+spotbugsMain {
+    group = "verification"
+    reports {
+        xml.enabled = true
+        xml.destination = file("$buildDir/reports/spotbugs/main.xml")
+    }
+    task spotbugsHtml {
+        description = "Creates a human readable Spotbugs report"
+        doLast {
+            def reportsFile = file("$buildDir/reports/spotbugs/main.xml")
+            def reportsHtml = file("$buildDir/reports/spotbugs/main.html")
+            def xsl = file('codequality/spotbugs_default.xsl')
+
+            ant.xslt(in: reportsFile,
+                    style: xsl,
+                    out: reportsHtml)
+        }
+    }
+    spotbugsMain.finalizedBy spotbugsHtml
+}
+spotbugsTest.enabled = false
+
+//***** Pitest Configuration *****
+// Some helpful links to get you started:
+// * Official gradle-pitest-plugin documentation: https://github.com/szpak/gradle-pitest-plugin
+// * Configuration option meaning: http://pitest.org/quickstart/commandline/
+//
+// Note: The default QMA settings do not include Pitest. See <i>Configure Pitest for the QMA (OPTIONAL)</i> in the Pitest confluence page.
+pitest {
+    //adds dependency to org.pitest:pitest-junit5-plugin and sets "testPlugin" to "junit5"
+    junit5PluginVersion = '0.15'
+    threads = 4
+    // Don't use projectName, which is surgically altered in above code on Jenkins
+    targetClasses = ["com.lights.oauth.*"]
+    // This puts the pitest results into a dated subfolder so you can keep multiple result sets for comparison
+    timestampedReports = false
+    // Cache results and only recheck coverage where there's a change
+    enableDefaultIncrementalAnalysis = true
+    // Helps prevent inaccurate coverage counts
+    detectInlinedCode = true
+    // Usually caused by mis-configuration, causing it to not see the classes under test
+    failWhenNoMutations = false
+    // XML needed for QMA
+    outputFormats = ['XML', 'HTML']
+    excludedClasses = [
+            // not significant code to test
+            "*.server.*",
+            "*.Application",
+            "*.model.*",
+            "*.entity.*"
+    ]
+    avoidCallsTo = ["org.slf4j"]
+    verbose = false
+    jvmArgs = ['-Xmx2048m']
+}
